@@ -3,7 +3,6 @@ import { mdiHelpCircle } from "@mdi/js";
 import { css, CSSResultGroup, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
 import { fireEvent } from "../../../common/dom/fire_event";
-import "../../../components/ha-alert";
 import "../../../components/ha-card";
 import "../../../components/ha-icon-button";
 import { Action, ScriptConfig } from "../../../data/script";
@@ -20,33 +19,20 @@ export class HaManualScriptEditor extends LitElement {
 
   @property({ type: Boolean }) public narrow!: boolean;
 
-  @property({ attribute: false }) public config!: ScriptConfig;
+  @property({ type: Boolean }) public disabled = false;
 
-  @property({ type: Boolean, reflect: true, attribute: "re-order-mode" })
-  public reOrderMode = false;
+  @property({ attribute: false }) public config!: ScriptConfig;
 
   protected render() {
     return html`
-      ${this.reOrderMode
-        ? html`
-            <ha-alert
-              alert-type="info"
-              .title=${this.hass.localize(
-                "ui.panel.config.automation.editor.re_order_mode.title"
-              )}
-            >
-              ${this.hass.localize(
-                "ui.panel.config.automation.editor.re_order_mode.description"
-              )}
-              <mwc-button slot="action" @click=${this._exitReOrderMode}>
-                ${this.hass.localize(
-                  "ui.panel.config.automation.editor.re_order_mode.exit"
-                )}
-              </mwc-button>
-            </ha-alert>
-          `
+      ${this.disabled
+        ? html`<ha-alert alert-type="warning">
+            ${this.hass.localize("ui.panel.config.script.editor.read_only")}
+            <mwc-button slot="action" @click=${this._duplicate}>
+              ${this.hass.localize("ui.panel.config.script.editor.migrate")}
+            </mwc-button>
+          </ha-alert>`
         : ""}
-
       <div class="header">
         <h2 id="sequence-heading" class="name">
           ${this.hass.localize("ui.panel.config.script.editor.sequence")}
@@ -72,7 +58,7 @@ export class HaManualScriptEditor extends LitElement {
         @value-changed=${this._sequenceChanged}
         .hass=${this.hass}
         .narrow=${this.narrow}
-        .reOrderMode=${this.reOrderMode}
+        .disabled=${this.disabled}
       ></ha-automation-action>
     `;
   }
@@ -84,8 +70,8 @@ export class HaManualScriptEditor extends LitElement {
     });
   }
 
-  private _exitReOrderMode() {
-    this.reOrderMode = !this.reOrderMode;
+  private _duplicate() {
+    fireEvent(this, "duplicate");
   }
 
   static get styles(): CSSResultGroup {
@@ -118,10 +104,6 @@ export class HaManualScriptEditor extends LitElement {
         }
         .header a {
           color: var(--secondary-text-color);
-        }
-        ha-alert {
-          display: block;
-          margin-bottom: 16px;
         }
       `,
     ];

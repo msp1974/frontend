@@ -20,14 +20,17 @@ export interface EntityRegistryEntry {
   entity_category: "config" | "diagnostic" | null;
   has_entity_name: boolean;
   original_name?: string;
+  unique_id: string;
+  translation_key?: string;
+  options: EntityRegistryOptions | null;
 }
 
 export interface ExtEntityRegistryEntry extends EntityRegistryEntry {
-  unique_id: string;
   capabilities: Record<string, unknown>;
   original_icon?: string;
   device_class?: string;
   original_device_class?: string;
+  aliases: string[];
 }
 
 export interface UpdateEntityRegistryEntryResult {
@@ -37,6 +40,8 @@ export interface UpdateEntityRegistryEntryResult {
 }
 
 export interface SensorEntityOptions {
+  display_precision?: number | null;
+  suggested_display_precision?: number | null;
   unit_of_measurement?: string | null;
 }
 
@@ -52,6 +57,12 @@ export interface WeatherEntityOptions {
   wind_speed_unit?: string | null;
 }
 
+export interface EntityRegistryOptions {
+  number?: NumberEntityOptions;
+  sensor?: SensorEntityOptions;
+  weather?: WeatherEntityOptions;
+}
+
 export interface EntityRegistryEntryUpdateParams {
   name?: string | null;
   icon?: string | null;
@@ -61,7 +72,8 @@ export interface EntityRegistryEntryUpdateParams {
   hidden_by: string | null;
   new_entity_id?: string;
   options_domain?: string;
-  options?: SensorEntityOptions | WeatherEntityOptions;
+  options?: SensorEntityOptions | NumberEntityOptions | WeatherEntityOptions;
+  aliases?: string[];
 }
 
 export const findBatteryEntity = (
@@ -106,6 +118,15 @@ export const getExtendedEntityRegistryEntry = (
   hass.callWS({
     type: "config/entity_registry/get",
     entity_id: entityId,
+  });
+
+export const getExtendedEntityRegistryEntries = (
+  hass: HomeAssistant,
+  entityIds: string[]
+): Promise<Record<string, ExtEntityRegistryEntry>> =>
+  hass.callWS({
+    type: "config/entity_registry/get_entries",
+    entity_ids: entityIds,
   });
 
 export const updateEntityRegistryEntry = (
@@ -161,9 +182,12 @@ export const subscribeEntityRegistry = (
     onChange
   );
 
-export const sortEntityRegistryByName = (entries: EntityRegistryEntry[]) =>
+export const sortEntityRegistryByName = (
+  entries: EntityRegistryEntry[],
+  language: string
+) =>
   entries.sort((entry1, entry2) =>
-    caseInsensitiveStringCompare(entry1.name || "", entry2.name || "")
+    caseInsensitiveStringCompare(entry1.name || "", entry2.name || "", language)
   );
 
 export const entityRegistryById = memoizeOne(

@@ -11,7 +11,7 @@ import {
   union,
 } from "superstruct";
 import memoizeOne from "memoize-one";
-import { ensureArray } from "../../../../../common/ensure-array";
+import { ensureArray } from "../../../../../common/array/ensure-array";
 import { fireEvent } from "../../../../../common/dom/fire_event";
 import { hasTemplate } from "../../../../../common/string/has-template";
 import { StateTrigger } from "../../../../../data/automation";
@@ -40,6 +40,8 @@ export class HaStateTrigger extends LitElement implements TriggerElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @property({ attribute: false }) public trigger!: StateTrigger;
+
+  @property({ type: Boolean }) public disabled = false;
 
   public static get defaultConfig() {
     return { entity_id: [] };
@@ -155,6 +157,7 @@ export class HaStateTrigger extends LitElement implements TriggerElement {
         .schema=${schema}
         @value-changed=${this._valueChanged}
         .computeLabel=${this._computeLabelCallback}
+        .disabled=${this.disabled}
       ></ha-form>
     `;
   }

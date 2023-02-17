@@ -3,13 +3,13 @@ import "@material/mwc-list/mwc-list-item";
 import type { RequestSelectedDetail } from "@material/mwc-list/mwc-list-item";
 import {
   mdiCodeBraces,
+  mdiCommentProcessingOutline,
   mdiDotsVertical,
   mdiFileMultiple,
   mdiFormatListBulletedTriangle,
   mdiHelp,
   mdiHelpCircle,
   mdiMagnify,
-  mdiMicrophone,
   mdiPencil,
   mdiPlus,
   mdiRefresh,
@@ -38,9 +38,11 @@ import { fireEvent } from "../../common/dom/fire_event";
 import scrollToTarget from "../../common/dom/scroll-to-target";
 import { shouldHandleRequestSelectedEvent } from "../../common/mwc/handle-request-selected-event";
 import { navigate } from "../../common/navigate";
+import { constructUrlCurrentPath } from "../../common/url/construct-url";
 import {
   addSearchParam,
-  extractSearchParam,
+  extractSearchParamsObject,
+  removeSearchParam,
 } from "../../common/url/search-params";
 import { computeRTLDirection } from "../../common/util/compute_rtl";
 import { debounce } from "../../common/util/debounce";
@@ -112,6 +114,11 @@ class HUIRoot extends LitElement {
   }
 
   protected render(): TemplateResult {
+    const views = this.lovelace?.config.views ?? [];
+
+    const curViewConfig =
+      typeof this._curView === "number" ? views[this._curView] : undefined;
+
     return html`
       <ha-app-layout
         class=${classMap({
@@ -144,7 +151,7 @@ class HUIRoot extends LitElement {
                     @click=${this._editModeDisable}
                   ></mwc-button>
                   <a
-                    href=${documentationUrl(this.hass, "/lovelace/")}
+                    href=${documentationUrl(this.hass, "/dashboards/")}
                     rel="noreferrer"
                     class="menu-link"
                     target="_blank"
@@ -169,9 +176,6 @@ class HUIRoot extends LitElement {
                       : html`
                           <mwc-list-item
                             graphic="icon"
-                            aria-label=${this.hass!.localize(
-                              "ui.panel.lovelace.unused_entities.title"
-                            )}
                             @request-selected=${this._handleUnusedEntities}
                           >
                             <ha-svg-icon
@@ -229,11 +233,21 @@ class HUIRoot extends LitElement {
               `
             : html`
                 <app-toolbar>
-                  <ha-menu-button
-                    .hass=${this.hass}
-                    .narrow=${this.narrow}
-                  ></ha-menu-button>
-                  ${this.lovelace!.config.views.length > 1
+                  ${curViewConfig?.subview
+                    ? html`
+                        <ha-icon-button-arrow-prev
+                          @click=${this._goBack}
+                        ></ha-icon-button-arrow-prev>
+                      `
+                    : html`
+                        <ha-menu-button
+                          .hass=${this.hass}
+                          .narrow=${this.narrow}
+                        ></ha-menu-button>
+                      `}
+                  ${curViewConfig?.subview
+                    ? html`<div main-title>${curViewConfig.title}</div>`
+                    : views.filter((view) => !view.subview).length > 1
                     ? html`
                         <ha-tabs
                           scrollable
@@ -241,18 +255,20 @@ class HUIRoot extends LitElement {
                           @iron-activate=${this._handleViewSelected}
                           dir=${computeRTLDirection(this.hass!)}
                         >
-                          ${this.lovelace!.config.views.map(
+                          ${views.map(
                             (view) => html`
                               <paper-tab
                                 aria-label=${ifDefined(view.title)}
                                 class=${classMap({
                                   "hide-tab": Boolean(
-                                    view.visible !== undefined &&
-                                      ((Array.isArray(view.visible) &&
-                                        !view.visible.some(
-                                          (e) => e.user === this.hass!.user!.id
-                                        )) ||
-                                        view.visible === false)
+                                    view.subview ||
+                                      (view.visible !== undefined &&
+                                        ((Array.isArray(view.visible) &&
+                                          !view.visible.some(
+                                            (e) =>
+                                              e.user === this.hass!.user?.id
+                                          )) ||
+                                          view.visible === false))
                                   ),
                                 })}
                               >
@@ -286,9 +302,9 @@ class HUIRoot extends LitElement {
                     ? html`
                         <ha-icon-button
                           .label=${this.hass!.localize(
-                            "ui.panel.lovelace.menu.start_conversation"
+                            "ui.panel.lovelace.menu.assist"
                           )}
-                          .path=${mdiMicrophone}
+                          .path=${mdiCommentProcessingOutline}
                           @click=${this._showVoiceCommandDialog}
                         ></ha-icon-button>
                       `
@@ -307,17 +323,13 @@ class HUIRoot extends LitElement {
                           ${this.narrow
                             ? html`
                                 <mwc-list-item
-                                  .label=${this.hass!.localize(
+                                  graphic="icon"
+                                  @request-selected=${this._handleShowQuickBar}
+                                >
+                                  ${this.hass!.localize(
                                     "ui.panel.lovelace.menu.search"
                                   )}
-                                  graphic="icon"
-                                  @request-selected=${this._showQuickBar}
-                                >
-                                  <span
-                                    >${this.hass!.localize(
-                                      "ui.panel.lovelace.menu.search"
-                                    )}</span
-                                  >
+
                                   <ha-svg-icon
                                     slot="graphic"
                                     .path=${mdiMagnify}
@@ -329,21 +341,17 @@ class HUIRoot extends LitElement {
                           this._conversation(this.hass.config.components)
                             ? html`
                                 <mwc-list-item
-                                  .label=${this.hass!.localize(
-                                    "ui.panel.lovelace.menu.start_conversation"
-                                  )}
                                   graphic="icon"
                                   @request-selected=${this
-                                    ._showVoiceCommandDialog}
+                                    ._handleShowVoiceCommandDialog}
                                 >
-                                  <span
-                                    >${this.hass!.localize(
-                                      "ui.panel.lovelace.menu.start_conversation"
-                                    )}</span
-                                  >
+                                  ${this.hass!.localize(
+                                    "ui.panel.lovelace.menu.assist"
+                                  )}
+
                                   <ha-svg-icon
                                     slot="graphic"
-                                    .path=${mdiMicrophone}
+                                    .path=${mdiCommentProcessingOutline}
                                   ></ha-svg-icon>
                                 </mwc-list-item>
                               `
@@ -351,35 +359,25 @@ class HUIRoot extends LitElement {
                           ${this._yamlMode
                             ? html`
                                 <mwc-list-item
-                                  aria-label=${this.hass!.localize(
-                                    "ui.common.refresh"
-                                  )}
                                   graphic="icon"
                                   @request-selected=${this._handleRefresh}
                                 >
-                                  <span
-                                    >${this.hass!.localize(
-                                      "ui.common.refresh"
-                                    )}</span
-                                  >
+                                  ${this.hass!.localize("ui.common.refresh")}
+
                                   <ha-svg-icon
                                     slot="graphic"
                                     .path=${mdiRefresh}
                                   ></ha-svg-icon>
                                 </mwc-list-item>
                                 <mwc-list-item
-                                  aria-label=${this.hass!.localize(
-                                    "ui.panel.lovelace.unused_entities.title"
-                                  )}
                                   graphic="icon"
                                   @request-selected=${this
                                     ._handleUnusedEntities}
                                 >
-                                  <span
-                                    >${this.hass!.localize(
-                                      "ui.panel.lovelace.unused_entities.title"
-                                    )}</span
-                                  >
+                                  ${this.hass!.localize(
+                                    "ui.panel.lovelace.unused_entities.title"
+                                  )}
+
                                   <ha-svg-icon
                                     slot="graphic"
                                     .path=${mdiShape}
@@ -394,9 +392,6 @@ class HUIRoot extends LitElement {
                             ? html`
                                 <mwc-list-item
                                   graphic="icon"
-                                  aria-label=${this.hass!.localize(
-                                    "ui.panel.lovelace.menu.reload_resources"
-                                  )}
                                   @request-selected=${this
                                     ._handleReloadResources}
                                 >
@@ -415,9 +410,6 @@ class HUIRoot extends LitElement {
                             ? html`
                                 <mwc-list-item
                                   graphic="icon"
-                                  aria-label=${this.hass!.localize(
-                                    "ui.panel.lovelace.menu.configure_ui"
-                                  )}
                                   @request-selected=${this
                                     ._handleEnableEditMode}
                                 >
@@ -442,12 +434,7 @@ class HUIRoot extends LitElement {
                                   class="menu-link"
                                   target="_blank"
                                 >
-                                  <mwc-list-item
-                                    graphic="icon"
-                                    aria-label=${this.hass!.localize(
-                                      "ui.panel.lovelace.menu.help"
-                                    )}
-                                  >
+                                  <mwc-list-item graphic="icon">
                                     ${this.hass!.localize(
                                       "ui.panel.lovelace.menu.help"
                                     )}
@@ -473,7 +460,7 @@ class HUIRoot extends LitElement {
                     @iron-activate=${this._handleViewSelected}
                     dir=${computeRTLDirection(this.hass!)}
                   >
-                    ${this.lovelace!.config.views.map(
+                    ${views.map(
                       (view) => html`
                         <paper-tab
                           aria-label=${ifDefined(view.title)}
@@ -483,7 +470,7 @@ class HUIRoot extends LitElement {
                                 view.visible !== undefined &&
                                 ((Array.isArray(view.visible) &&
                                   !view.visible.some(
-                                    (e) => e.user === this.hass!.user!.id
+                                    (e) => e.user === this.hass!.user?.id
                                   )) ||
                                   view.visible === false)
                             ),
@@ -505,6 +492,9 @@ class HUIRoot extends LitElement {
                           ${view.icon
                             ? html`
                                 <ha-icon
+                                  class=${classMap({
+                                    "child-view-icon": Boolean(view.subview),
+                                  })}
                                   title=${ifDefined(view.title)}
                                   .icon=${view.icon}
                                 ></ha-icon>
@@ -528,7 +518,7 @@ class HUIRoot extends LitElement {
                                   class="edit-icon view"
                                   @click=${this._moveViewRight}
                                   ?disabled=${(this._curView! as number) + 1 ===
-                                  this.lovelace!.config.views.length}
+                                  views.length}
                                 ></ha-icon-button-arrow-next>
                               `
                             : ""}
@@ -568,8 +558,16 @@ class HUIRoot extends LitElement {
 
   protected firstUpdated() {
     // Check for requested edit mode
-    if (extractSearchParam("edit") === "1") {
+    const searchParams = extractSearchParamsObject();
+    if (searchParams.edit === "1") {
       this.lovelace!.setEditMode(true);
+    } else if (searchParams.conversation === "1") {
+      showVoiceCommandDialog(this);
+      window.history.replaceState(
+        null,
+        "",
+        constructUrlCurrentPath(removeSearchParam("conversation"))
+      );
     }
   }
 
@@ -713,11 +711,32 @@ class HUIRoot extends LitElement {
     });
   }
 
+  private _handleShowQuickBar(ev: CustomEvent<RequestSelectedDetail>): void {
+    if (!shouldHandleRequestSelectedEvent(ev)) {
+      return;
+    }
+    this._showQuickBar();
+  }
+
   private _showQuickBar(): void {
     showQuickBar(this, {
       commandMode: false,
       hint: this.hass.localize("ui.tips.key_e_hint"),
     });
+  }
+
+  private _goBack(): void {
+    const views = this.lovelace?.config.views ?? [];
+    const curViewConfig =
+      typeof this._curView === "number" ? views[this._curView] : undefined;
+
+    if (curViewConfig?.back_path) {
+      navigate(curViewConfig.back_path);
+    } else if (history.length > 1) {
+      history.back();
+    } else {
+      navigate(this.route!.prefix);
+    }
   }
 
   private _handleRawEditor(ev: CustomEvent<RequestSelectedDetail>): void {
@@ -748,6 +767,15 @@ class HUIRoot extends LitElement {
       return;
     }
     navigate(`${this.route?.prefix}/hass-unused-entities`);
+  }
+
+  private _handleShowVoiceCommandDialog(
+    ev: CustomEvent<RequestSelectedDetail>
+  ): void {
+    if (!shouldHandleRequestSelectedEvent(ev)) {
+      return;
+    }
+    this._showVoiceCommandDialog();
   }
 
   private _showVoiceCommandDialog(): void {
@@ -973,7 +1001,10 @@ class HUIRoot extends LitElement {
           color: var(--error-color);
         }
         #view {
-          min-height: calc(100vh - var(--header-height));
+          min-height: calc(
+            100vh - var(--header-height) - env(safe-area-inset-top) -
+              env(safe-area-inset-bottom)
+          );
           /**
           * Since we only set min-height, if child nodes need percentage
           * heights they must use absolute positioning so we need relative
@@ -988,7 +1019,10 @@ class HUIRoot extends LitElement {
          * In edit mode we have the tab bar on a new line *
          */
         .edit-mode #view {
-          min-height: calc(100vh - var(--header-height) - 48px);
+          min-height: calc(
+            100vh - var(--header-height) - 48px - env(safe-area-inset-top) -
+              env(safe-area-inset-bottom)
+          );
         }
         #view > * {
           /**
@@ -1018,6 +1052,9 @@ class HUIRoot extends LitElement {
           --mdc-theme-primary: var(--app-header-edit-text-color, #fff);
           --mdc-button-outline-color: var(--app-header-edit-text-color, #fff);
           --mdc-typography-button-font-size: 14px;
+        }
+        .child-view-icon {
+          opacity: 0.5;
         }
       `,
     ];

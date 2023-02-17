@@ -55,7 +55,7 @@ export class EnergyGridSettings extends LitElement {
   public preferences!: EnergyPreferences;
 
   @property({ attribute: false })
-  public statsMetadata!: Record<string, StatisticsMetaData>;
+  public statsMetadata?: Record<string, StatisticsMetaData>;
 
   @property({ attribute: false })
   public validationResult?: EnergyPreferencesValidation;
@@ -136,7 +136,7 @@ export class EnergyGridSettings extends LitElement {
                   >${getStatisticLabel(
                     this.hass,
                     flow.stat_energy_from,
-                    this.statsMetadata[flow.stat_energy_from]
+                    this.statsMetadata?.[flow.stat_energy_from]
                   )}</span
                 >
                 <ha-icon-button
@@ -183,7 +183,7 @@ export class EnergyGridSettings extends LitElement {
                   >${getStatisticLabel(
                     this.hass,
                     flow.stat_energy_to,
-                    this.statsMetadata[flow.stat_energy_to]
+                    this.statsMetadata?.[flow.stat_energy_to]
                   )}</span
                 >
                 <ha-icon-button
@@ -220,6 +220,7 @@ export class EnergyGridSettings extends LitElement {
           ${this._co2ConfigEntry
             ? html`<div class="row" .entry=${this._co2ConfigEntry}>
                 <img
+                  alt=""
                   referrerpolicy="no-referrer"
                   src=${brandsUrl({
                     domain: "co2signal",
@@ -244,6 +245,7 @@ export class EnergyGridSettings extends LitElement {
             : html`
                 <div class="row border-bottom">
                   <img
+                    alt=""
                     referrerpolicy="no-referrer"
                     src=${brandsUrl({
                       domain: "co2signal",
@@ -364,6 +366,7 @@ export class EnergyGridSettings extends LitElement {
       ev.currentTarget.closest(".row").source;
     showEnergySettingsGridFlowFromDialog(this, {
       source: { ...origSource },
+      metadata: this.statsMetadata?.[origSource.stat_energy_from],
       saveCallback: async (source) => {
         const flowFrom = energySourcesByType(this.preferences).grid![0]
           .flow_from;
@@ -391,6 +394,7 @@ export class EnergyGridSettings extends LitElement {
       ev.currentTarget.closest(".row").source;
     showEnergySettingsGridFlowToDialog(this, {
       source: { ...origSource },
+      metadata: this.statsMetadata?.[origSource.stat_energy_to],
       saveCallback: async (source) => {
         const flowTo = energySourcesByType(this.preferences).grid![0].flow_to;
 

@@ -130,12 +130,13 @@ class MoveDatadiskDialog extends LitElement {
                 @selected=${this._select_device}
                 @closed=${stopPropagation}
                 dialogInitialFocus
+                fixedMenuPosition
               >
                 ${this._devices.map(
                   (device) =>
-                    html`<mwc-list-item .value=${device}
-                      >${device}</mwc-list-item
-                    >`
+                    html`<mwc-list-item .value=${device}>
+                      ${device}
+                    </mwc-list-item>`
                 )}
               </ha-select>
 
@@ -175,8 +176,9 @@ class MoveDatadiskDialog extends LitElement {
           ),
           text: extractApiErrorMessage(err),
         });
-        this.closeDialog();
       }
+    } finally {
+      this.closeDialog();
     }
   }
 

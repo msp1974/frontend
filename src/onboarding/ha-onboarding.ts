@@ -72,7 +72,7 @@ class HaOnboarding extends litLocalizeLiteMixin(HassElement) {
     const step = this._curStep()!;
 
     if (this._loading || !step) {
-      return html` <onboarding-loading></onboarding-loading> `;
+      return html`<onboarding-loading></onboarding-loading> `;
     }
     if (step.step === "user") {
       return html`
@@ -131,21 +131,6 @@ class HaOnboarding extends litLocalizeLiteMixin(HassElement) {
     if (window.innerWidth > 450) {
       import("./particles");
     }
-    if (matchMedia("(prefers-color-scheme: dark)").matches) {
-      applyThemesOnElement(
-        document.documentElement,
-        {
-          default_theme: "default",
-          default_dark_theme: null,
-          themes: {},
-          darkMode: true,
-          theme: "default",
-        },
-        undefined,
-        undefined,
-        true
-      );
-    }
   }
 
   protected updated(changedProps: PropertyValues) {
@@ -154,10 +139,25 @@ class HaOnboarding extends litLocalizeLiteMixin(HassElement) {
       document.querySelector("html")!.setAttribute("lang", this.language!);
     }
     if (changedProps.has("hass")) {
-      this.hassChanged(
-        this.hass!,
-        changedProps.get("hass") as HomeAssistant | undefined
-      );
+      const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
+      this.hassChanged(this.hass!, oldHass);
+      if (oldHass?.themes !== this.hass!.themes) {
+        if (matchMedia("(prefers-color-scheme: dark)").matches) {
+          applyThemesOnElement(
+            document.documentElement,
+            {
+              default_theme: "default",
+              default_dark_theme: null,
+              themes: {},
+              darkMode: true,
+              theme: "default",
+            },
+            undefined,
+            undefined,
+            true
+          );
+        }
+      }
     }
   }
 

@@ -1,12 +1,9 @@
-import "../../../../components/ha-form/ha-form";
 import { html, LitElement, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators";
-import memoizeOne from "memoize-one";
 import { assert, assign, boolean, object, optional, string } from "superstruct";
-import type { HassEntity } from "home-assistant-js-websocket/dist/types";
 import { fireEvent } from "../../../../common/dom/fire_event";
-import { computeDomain } from "../../../../common/entity/compute_domain";
-import { domainIcon } from "../../../../common/entity/domain_icon";
+import { entityId } from "../../../../common/structs/is-entity-id";
+import "../../../../components/ha-form/ha-form";
 import type { SchemaUnion } from "../../../../components/ha-form/types";
 import type { HomeAssistant } from "../../../../types";
 import type { EntityCardConfig } from "../../cards/types";
@@ -17,7 +14,7 @@ import { baseLovelaceCardConfig } from "../structs/base-card-struct";
 const cardConfigStruct = assign(
   baseLovelaceCardConfig,
   object({
-    entity: optional(string()),
+    entity: optional(entityId()),
     name: optional(string()),
     icon: optional(string()),
     attribute: optional(string()),
@@ -27,6 +24,38 @@ const cardConfigStruct = assign(
     footer: optional(headerFooterConfigStructs),
   })
 );
+
+const SCHEMA = [
+  { name: "entity", required: true, selector: { entity: {} } },
+  {
+    type: "grid",
+    name: "",
+    schema: [
+      { name: "name", selector: { text: {} } },
+      {
+        name: "icon",
+        selector: {
+          icon: {},
+        },
+        context: {
+          icon_entity: "entity",
+        },
+      },
+      {
+        name: "attribute",
+        selector: {
+          attribute: {},
+        },
+        context: {
+          filter_entity: "entity",
+        },
+      },
+      { name: "unit", selector: { text: {} } },
+      { name: "theme", selector: { theme: {} } },
+      { name: "state_color", selector: { boolean: {} } },
+    ],
+  },
+] as const;
 
 @customElement("hui-entity-card-editor")
 export class HuiEntityCardEditor
@@ -42,58 +71,16 @@ export class HuiEntityCardEditor
     this._config = config;
   }
 
-  private _schema = memoizeOne(
-    (entity: string, icon: string, entityState: HassEntity) =>
-      [
-        { name: "entity", required: true, selector: { entity: {} } },
-        {
-          type: "grid",
-          name: "",
-          schema: [
-            { name: "name", selector: { text: {} } },
-            {
-              name: "icon",
-              selector: {
-                icon: {
-                  placeholder: icon || entityState?.attributes.icon,
-                  fallbackPath:
-                    !icon && !entityState?.attributes.icon && entityState
-                      ? domainIcon(computeDomain(entity), entityState)
-                      : undefined,
-                },
-              },
-            },
-
-            {
-              name: "attribute",
-              selector: { attribute: { entity_id: entity } },
-            },
-            { name: "unit", selector: { text: {} } },
-            { name: "theme", selector: { theme: {} } },
-            { name: "state_color", selector: { boolean: {} } },
-          ],
-        },
-      ] as const
-  );
-
   protected render(): TemplateResult {
     if (!this.hass || !this._config) {
       return html``;
     }
 
-    const entityState = this.hass.states[this._config.entity];
-
-    const schema = this._schema(
-      this._config.entity,
-      this._config.icon,
-      entityState
-    );
-
     return html`
       <ha-form
         .hass=${this.hass}
         .data=${this._config}
-        .schema=${schema}
+        .schema=${SCHEMA}
         .computeLabel=${this._computeLabelCallback}
         @value-changed=${this._valueChanged}
       ></ha-form>
@@ -106,9 +93,7 @@ export class HuiEntityCardEditor
     fireEvent(this, "config-changed", { config });
   }
 
-  private _computeLabelCallback = (
-    schema: SchemaUnion<ReturnType<typeof this._schema>>
-  ) => {
+  private _computeLabelCallback = (schema: SchemaUnion<typeof SCHEMA>) => {
     if (schema.name === "entity") {
       return this.hass!.localize(
         "ui.panel.lovelace.editor.card.generic.entity"

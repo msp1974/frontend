@@ -9,6 +9,7 @@ import {
   mdiPlayCircleOutline,
   mdiRenameBox,
   mdiStopCircleOutline,
+  mdiSort,
 } from "@mdi/js";
 import { css, CSSResultGroup, html, LitElement, PropertyValues } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
@@ -100,6 +101,8 @@ export default class HaAutomationActionRow extends LitElement {
 
   @property({ type: Boolean }) public narrow = false;
 
+  @property({ type: Boolean }) public disabled = false;
+
   @property({ type: Boolean }) public hideMenu = false;
 
   @property({ type: Boolean }) public reOrderMode = false;
@@ -179,7 +182,7 @@ export default class HaAutomationActionRow extends LitElement {
                     <ha-svg-icon slot="graphic" .path=${mdiPlay}></ha-svg-icon>
                   </mwc-list-item>
 
-                  <mwc-list-item graphic="icon">
+                  <mwc-list-item graphic="icon" .disabled=${this.disabled}>
                     ${this.hass.localize(
                       "ui.panel.config.automation.editor.actions.rename"
                     )}
@@ -188,7 +191,13 @@ export default class HaAutomationActionRow extends LitElement {
                       .path=${mdiRenameBox}
                     ></ha-svg-icon>
                   </mwc-list-item>
-                  <mwc-list-item graphic="icon">
+                  <mwc-list-item graphic="icon" .disabled=${this.disabled}>
+                    ${this.hass.localize(
+                      "ui.panel.config.automation.editor.actions.re_order"
+                    )}
+                    <ha-svg-icon slot="graphic" .path=${mdiSort}></ha-svg-icon>
+                  </mwc-list-item>
+                  <mwc-list-item graphic="icon" .disabled=${this.disabled}>
                     ${this.hass.localize(
                       "ui.panel.config.automation.editor.actions.duplicate"
                     )}
@@ -234,7 +243,7 @@ export default class HaAutomationActionRow extends LitElement {
 
                   <li divider role="separator"></li>
 
-                  <mwc-list-item graphic="icon">
+                  <mwc-list-item graphic="icon" .disabled=${this.disabled}>
                     ${this.action.enabled === false
                       ? this.hass.localize(
                           "ui.panel.config.automation.editor.actions.enable"
@@ -249,7 +258,11 @@ export default class HaAutomationActionRow extends LitElement {
                         : mdiStopCircleOutline}
                     ></ha-svg-icon>
                   </mwc-list-item>
-                  <mwc-list-item class="warning" graphic="icon">
+                  <mwc-list-item
+                    class="warning"
+                    graphic="icon"
+                    .disabled=${this.disabled}
+                  >
                     ${this.hass.localize(
                       "ui.panel.config.automation.editor.actions.delete"
                     )}
@@ -302,6 +315,7 @@ export default class HaAutomationActionRow extends LitElement {
                   <ha-yaml-editor
                     .hass=${this.hass}
                     .defaultValue=${this.action}
+                    .readOnly=${this.disabled}
                     @value-changed=${this._onYamlChange}
                   ></ha-yaml-editor>
                 `
@@ -312,6 +326,7 @@ export default class HaAutomationActionRow extends LitElement {
                       action: this.action,
                       narrow: this.narrow,
                       reOrderMode: this.reOrderMode,
+                      disabled: this.disabled,
                     })}
                   </div>
                 `}
@@ -340,20 +355,23 @@ export default class HaAutomationActionRow extends LitElement {
         await this._renameAction();
         break;
       case 2:
-        fireEvent(this, "duplicate");
+        fireEvent(this, "re-order");
         break;
       case 3:
+        fireEvent(this, "duplicate");
+        break;
+      case 4:
         this._switchUiMode();
         this.expand();
         break;
-      case 4:
+      case 5:
         this._switchYamlMode();
         this.expand();
         break;
-      case 5:
+      case 6:
         this._onDisable();
         break;
-      case 6:
+      case 7:
         this._onDelete();
         break;
     }

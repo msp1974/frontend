@@ -8,6 +8,7 @@ import { repeat } from "lit/directives/repeat";
 import memoizeOne from "memoize-one";
 import type { SortableEvent } from "sortablejs";
 import { fireEvent } from "../../../../common/dom/fire_event";
+import "../../../../components/ha-button";
 import "../../../../components/ha-button-menu";
 import "../../../../components/ha-svg-icon";
 import type { Condition } from "../../../../data/automation";
@@ -41,6 +42,10 @@ export default class HaAutomationCondition extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @property() public conditions!: Condition[];
+
+  @property({ type: Boolean }) public disabled = false;
+
+  @property({ type: Boolean }) public nested = false;
 
   @property({ type: Boolean }) public reOrderMode = false;
 
@@ -100,6 +105,25 @@ export default class HaAutomationCondition extends LitElement {
       return html``;
     }
     return html`
+      ${this.reOrderMode && !this.nested
+        ? html`
+            <ha-alert
+              alert-type="info"
+              .title=${this.hass.localize(
+                "ui.panel.config.automation.editor.re_order_mode.title"
+              )}
+            >
+              ${this.hass.localize(
+                "ui.panel.config.automation.editor.re_order_mode.description_conditions"
+              )}
+              <mwc-button slot="action" @click=${this._exitReOrderMode}>
+                ${this.hass.localize(
+                  "ui.panel.config.automation.editor.re_order_mode.exit"
+                )}
+              </mwc-button>
+            </ha-alert>
+          `
+        : null}
       <div class="conditions">
         ${repeat(
           this.conditions,
@@ -111,9 +135,11 @@ export default class HaAutomationCondition extends LitElement {
               .condition=${cond}
               .hideMenu=${this.reOrderMode}
               .reOrderMode=${this.reOrderMode}
+              .disabled=${this.disabled}
               @duplicate=${this._duplicateCondition}
               @move-condition=${this._move}
               @value-changed=${this._conditionChanged}
+              @re-order=${this._enterReOrderMode}
               .hass=${this.hass}
             >
               ${this.reOrderMode
@@ -147,25 +173,40 @@ export default class HaAutomationCondition extends LitElement {
           `
         )}
       </div>
-      <ha-button-menu fixed @action=${this._addCondition}>
-        <mwc-button
+      <ha-button-menu
+        fixed
+        @action=${this._addCondition}
+        .disabled=${this.disabled}
+      >
+        <ha-button
           slot="trigger"
           outlined
+          .disabled=${this.disabled}
           .label=${this.hass.localize(
             "ui.panel.config.automation.editor.conditions.add"
           )}
         >
           <ha-svg-icon .path=${mdiPlus} slot="icon"></ha-svg-icon>
-        </mwc-button>
+        </ha-button>
         ${this._processedTypes(this.hass.localize).map(
           ([opt, label, icon]) => html`
-            <mwc-list-item .value=${opt} aria-label=${label} graphic="icon">
+            <mwc-list-item .value=${opt} graphic="icon">
               ${label}<ha-svg-icon slot="graphic" .path=${icon}></ha-svg-icon
             ></mwc-list-item>
           `
         )}
       </ha-button-menu>
     `;
+  }
+
+  private async _enterReOrderMode(ev: CustomEvent) {
+    if (this.nested) return;
+    ev.stopPropagation();
+    this.reOrderMode = true;
+  }
+
+  private async _exitReOrderMode() {
+    this.reOrderMode = false;
   }
 
   private async _createSortable() {
@@ -288,7 +329,7 @@ export default class HaAutomationCondition extends LitElement {
               icon,
             ] as [string, string, string]
         )
-        .sort((a, b) => stringCompare(a[1], b[1]))
+        .sort((a, b) => stringCompare(a[1], b[1], this.hass.locale.language))
   );
 
   static get styles(): CSSResultGroup {
@@ -302,6 +343,12 @@ export default class HaAutomationCondition extends LitElement {
         }
         ha-svg-icon {
           height: 20px;
+        }
+        ha-alert {
+          display: block;
+          margin-bottom: 16px;
+          border-radius: var(--ha-card-border-radius, 12px);
+          overflow: hidden;
         }
         .handle {
           cursor: move;

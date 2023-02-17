@@ -11,6 +11,7 @@ import type { ErrorCardConfig } from "../cards/types";
 import { LovelaceElement, LovelaceElementConfig } from "../elements/types";
 import { LovelaceRow, LovelaceRowConfig } from "../entity-rows/types";
 import { LovelaceHeaderFooterConfig } from "../header-footer/types";
+import { LovelaceTileFeatureConfig } from "../tile-features/types";
 import {
   LovelaceBadge,
   LovelaceCard,
@@ -18,6 +19,8 @@ import {
   LovelaceHeaderFooter,
   LovelaceHeaderFooterConstructor,
   LovelaceRowConstructor,
+  LovelaceTileFeature,
+  LovelaceTileFeatureConstructor,
 } from "../types";
 
 const TIMEOUT = 2000;
@@ -52,6 +55,11 @@ interface CreateElementConfigTypes {
     config: LovelaceViewConfig;
     element: LovelaceViewElement;
     constructor: unknown;
+  };
+  "tile-feature": {
+    config: LovelaceTileFeatureConfig;
+    element: LovelaceTileFeature;
+    constructor: LovelaceTileFeatureConstructor;
   };
 }
 
@@ -146,7 +154,7 @@ const _lazyCreate = <T extends keyof CreateElementConfigTypes>(
 
 const _getCustomTag = (type: string) =>
   type.startsWith(CUSTOM_TYPE_PREFIX)
-    ? type.substr(CUSTOM_TYPE_PREFIX.length)
+    ? type.slice(CUSTOM_TYPE_PREFIX.length)
     : undefined;
 
 export const createLovelaceElement = <T extends keyof CreateElementConfigTypes>(

@@ -11,6 +11,7 @@ import { fireEvent } from "../../../../common/dom/fire_event";
 import { stringCompare } from "../../../../common/string/compare";
 import type { LocalizeFunc } from "../../../../common/translations/localize";
 import "../../../../components/ha-button-menu";
+import "../../../../components/ha-button";
 import type { HaSelect } from "../../../../components/ha-select";
 import "../../../../components/ha-svg-icon";
 import { Trigger } from "../../../../data/automation";
@@ -43,6 +44,10 @@ export default class HaAutomationTrigger extends LitElement {
 
   @property() public triggers!: Trigger[];
 
+  @property({ type: Boolean }) public disabled = false;
+
+  @property({ type: Boolean }) public nested = false;
+
   @property({ type: Boolean }) public reOrderMode = false;
 
   private _focusLastTriggerOnChange = false;
@@ -53,6 +58,27 @@ export default class HaAutomationTrigger extends LitElement {
 
   protected render() {
     return html`
+      ${
+        this.reOrderMode && !this.nested
+          ? html`
+              <ha-alert
+                alert-type="info"
+                .title=${this.hass.localize(
+                  "ui.panel.config.automation.editor.re_order_mode.title"
+                )}
+              >
+                ${this.hass.localize(
+                  "ui.panel.config.automation.editor.re_order_mode.description_triggers"
+                )}
+                <mwc-button slot="action" @click=${this._exitReOrderMode}>
+                  ${this.hass.localize(
+                    "ui.panel.config.automation.editor.re_order_mode.exit"
+                  )}
+                </mwc-button>
+              </ha-alert>
+            `
+          : null
+      }
       <div class="triggers">
         ${repeat(
           this.triggers,
@@ -65,6 +91,8 @@ export default class HaAutomationTrigger extends LitElement {
               @duplicate=${this._duplicateTrigger}
               @value-changed=${this._triggerChanged}
               .hass=${this.hass}
+              .disabled=${this.disabled}
+              @re-order=${this._enterReOrderMode}
             >
               ${this.reOrderMode
                 ? html`
@@ -97,19 +125,20 @@ export default class HaAutomationTrigger extends LitElement {
           `
         )}
         </div>
-        <ha-button-menu @action=${this._addTrigger}>
-          <mwc-button
+        <ha-button-menu @action=${this._addTrigger} .disabled=${this.disabled}>
+          <ha-button
             slot="trigger"
             outlined
             .label=${this.hass.localize(
               "ui.panel.config.automation.editor.triggers.add"
             )}
+            .disabled=${this.disabled}
           >
             <ha-svg-icon .path=${mdiPlus} slot="icon"></ha-svg-icon>
-          </mwc-button>
+          </ha-button>
           ${this._processedTypes(this.hass.localize).map(
             ([opt, label, icon]) => html`
-              <mwc-list-item .value=${opt} aria-label=${label} graphic="icon">
+              <mwc-list-item .value=${opt} graphic="icon">
                 ${label}<ha-svg-icon slot="graphic" .path=${icon}></ha-svg-icon
               ></mwc-list-item>
             `
@@ -142,6 +171,16 @@ export default class HaAutomationTrigger extends LitElement {
         row.focus();
       });
     }
+  }
+
+  private async _enterReOrderMode(ev: CustomEvent) {
+    if (this.nested) return;
+    ev.stopPropagation();
+    this.reOrderMode = true;
+  }
+
+  private async _exitReOrderMode() {
+    this.reOrderMode = false;
   }
 
   private async _createSortable() {
@@ -264,7 +303,7 @@ export default class HaAutomationTrigger extends LitElement {
               icon,
             ] as [string, string, string]
         )
-        .sort((a, b) => stringCompare(a[1], b[1]))
+        .sort((a, b) => stringCompare(a[1], b[1], this.hass.locale.language))
   );
 
   static get styles(): CSSResultGroup {
@@ -278,6 +317,12 @@ export default class HaAutomationTrigger extends LitElement {
         }
         ha-svg-icon {
           height: 20px;
+        }
+        ha-alert {
+          display: block;
+          margin-bottom: 16px;
+          border-radius: var(--ha-card-border-radius, 16px);
+          overflow: hidden;
         }
         .handle {
           cursor: move;

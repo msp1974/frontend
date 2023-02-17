@@ -14,8 +14,10 @@ import { customElement, property, state } from "lit/decorators";
 import { ifDefined } from "lit/directives/if-defined";
 import memoizeOne from "memoize-one";
 import { isComponentLoaded } from "../../../common/config/is_component_loaded";
-import { fireEvent } from "../../../common/dom/fire_event";
-import { protocolIntegrationPicked } from "../../../common/integrations/protocolIntegrationPicked";
+import {
+  protocolIntegrationPicked,
+  PROTOCOL_INTEGRATIONS,
+} from "../../../common/integrations/protocolIntegrationPicked";
 import { navigate } from "../../../common/navigate";
 import { caseInsensitiveStringCompare } from "../../../common/string/compare";
 import type { LocalizeFunc } from "../../../common/translations/localize";
@@ -33,7 +35,6 @@ import {
   subscribeConfigEntries,
 } from "../../../data/config_entries";
 import {
-  getConfigFlowHandlers,
   getConfigFlowInProgressCollection,
   localizeConfigFlowTitle,
   subscribeConfigFlowInProgress,
@@ -50,13 +51,16 @@ import {
 } from "../../../data/entity_registry";
 import {
   domainToName,
+  fetchIntegrationManifest,
   fetchIntegrationManifests,
   IntegrationManifest,
+  IntegrationLogInfo,
+  subscribeLogInfo,
 } from "../../../data/integration";
 import {
-  getSupportedBrands,
-  getSupportedBrandsLookup,
-} from "../../../data/supported_brands";
+  getIntegrationDescriptions,
+  findIntegration,
+} from "../../../data/integrations";
 import { scanUSBDevices } from "../../../data/usb";
 import { showConfigFlowDialog } from "../../../dialogs/config-flow/show-dialog-config-flow";
 import {
@@ -69,12 +73,13 @@ import { SubscribeMixin } from "../../../mixins/subscribe-mixin";
 import { haStyle } from "../../../resources/styles";
 import type { HomeAssistant, Route } from "../../../types";
 import { configSections } from "../ha-panel-config";
-import { HELPER_DOMAINS } from "../helpers/const";
+import { isHelperDomain } from "../helpers/const";
 import "./ha-config-flow-card";
 import "./ha-ignored-config-entry-card";
 import "./ha-integration-card";
 import type { HaIntegrationCard } from "./ha-integration-card";
 import "./ha-integration-overflow-menu";
+import { showAddIntegrationDialog } from "./show-add-integration-dialog";
 
 export interface ConfigEntryUpdatedEvent {
   entry: ConfigEntry;
@@ -154,6 +159,10 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
 
   @state() private _diagnosticHandlers?: Record<string, boolean>;
 
+  @state() private _logInfos?: {
+    [integration: string]: IntegrationLogInfo;
+  };
+
   public hassSubscribe(): Array<UnsubscribeFunc | Promise<UnsubscribeFunc>> {
     return [
       subscribeEntityRegistry(this.hass.connection, (entries) => {
@@ -224,12 +233,20 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
             (conf1, conf2) =>
               caseInsensitiveStringCompare(
                 conf1.localized_domain_name + conf1.title,
-                conf2.localized_domain_name + conf2.title
+                conf2.localized_domain_name + conf2.title,
+                this.hass.locale.language
               )
           );
         },
-        { type: "integration" }
+        { type: ["device", "hub", "service"] }
       ),
+      subscribeLogInfo(this.hass.connection, (log_infos) => {
+        const logInfoLookup: { [integration: string]: IntegrationLogInfo } = {};
+        for (const log_info of log_infos) {
+          logInfoLookup[log_info.domain] = log_info;
+        }
+        this._logInfos = logInfoLookup;
+      }),
     ];
   }
 
@@ -490,7 +507,7 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
                 ([domain, items]) =>
                   html`<ha-integration-card
                     data-domain=${domain}
-                    disabled
+                    entryDisabled
                     .hass=${this.hass}
                     .domain=${domain}
                     .items=${items}
@@ -514,6 +531,7 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
                     .supportsDiagnostics=${this._diagnosticHandlers
                       ? this._diagnosticHandlers[domain]
                       : false}
+                    .logInfo=${this._logInfos ? this._logInfos[domain] : null}
                   ></ha-integration-card>`
               )
             : this._filter &&
@@ -599,7 +617,9 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
     // Make a copy so we can keep track of previously loaded manifests
     // for discovered flows (which are not part of these results)
     const manifests = { ...this._manifests };
-    for (const manifest of fetched) manifests[manifest.domain] = manifest;
+    for (const manifest of fetched) {
+      manifests[manifest.domain] = manifest;
+    }
     this._manifests = manifests;
   }
 
@@ -630,15 +650,9 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
   }
 
   private _createFlow() {
-    showConfigFlowDialog(this, {
-      searchQuery: this._filter,
-      dialogClosedCallback: () => {
-        this._handleFlowUpdated();
-      },
-      showAdvanced: this.showAdvanced,
+    showAddIntegrationDialog(this, {
+      initialFilter: this._filter,
     });
-    // For config entries. Also loading config flow ones for added integration
-    this.hass.loadBackendTranslation("title", undefined, true);
   }
 
   private _handleMenuAction(ev: CustomEvent<ActionDetail>) {
@@ -683,21 +697,35 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
   }
 
   private async _handleAdd(localizePromise: Promise<LocalizeFunc>) {
+    const brand = extractSearchParam("brand");
     const domain = extractSearchParam("domain");
     navigate("/config/integrations", { replace: true });
+
+    if (brand) {
+      showAddIntegrationDialog(this, {
+        brand,
+      });
+      return;
+    }
     if (!domain) {
       return;
     }
 
-    const handlers = await getConfigFlowHandlers(this.hass, "integration");
+    const descriptions = await getIntegrationDescriptions(this.hass);
+    const integrations = {
+      ...descriptions.core.integration,
+      ...descriptions.custom.integration,
+    };
 
-    // Integration exists, so we can just create a flow
-    if (handlers.includes(domain)) {
+    const integration = findIntegration(integrations, domain);
+
+    if (integration?.config_flow) {
+      // Integration exists, so we can just create a flow
       const localize = await localizePromise;
       if (
         await showConfirmationDialog(this, {
           title: localize("ui.panel.config.integrations.confirm_new", {
-            integration: domainToName(localize, domain),
+            integration: integration.name || domainToName(localize, domain),
           }),
         })
       ) {
@@ -706,54 +734,77 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
             this._handleFlowUpdated();
           },
           startFlowHandler: domain,
-          manifest: this._manifests[domain],
+          manifest: await fetchIntegrationManifest(this.hass, domain),
           showAdvanced: this.hass.userData?.showAdvanced,
         });
       }
       return;
     }
 
-    const supportedBrands = await getSupportedBrands(this.hass);
-    const supportedBrandsIntegrations =
-      getSupportedBrandsLookup(supportedBrands);
+    if (integration?.supported_by) {
+      // Integration is a alias, so we can just create a flow
+      const localize = await localizePromise;
+      const supportedIntegration = findIntegration(
+        integrations,
+        integration.supported_by
+      );
 
-    // Supported brand exists, so we can just create a flow
-    if (Object.keys(supportedBrandsIntegrations).includes(domain)) {
-      const brand = supportedBrandsIntegrations[domain];
-      const slug = brand.supported_flows![0];
+      if (!supportedIntegration) {
+        return;
+      }
 
       showConfirmationDialog(this, {
         text: this.hass.localize(
           "ui.panel.config.integrations.config_flow.supported_brand_flow",
           {
-            supported_brand: brand.name,
-            flow_domain_name: domainToName(this.hass.localize, slug),
+            supported_brand: integration.name || domainToName(localize, domain),
+            flow_domain_name:
+              supportedIntegration.name ||
+              domainToName(localize, integration.supported_by),
           }
         ),
-        confirm: () => {
-          if (["zha", "zwave_js"].includes(slug)) {
-            protocolIntegrationPicked(this, this.hass, slug);
+        confirm: async () => {
+          if (
+            (PROTOCOL_INTEGRATIONS as ReadonlyArray<string>).includes(
+              integration.supported_by!
+            )
+          ) {
+            protocolIntegrationPicked(
+              this,
+              this.hass,
+              integration.supported_by!
+            );
             return;
           }
-
-          fireEvent(this, "handler-picked", {
-            handler: slug,
+          showConfigFlowDialog(this, {
+            dialogClosedCallback: () => {
+              this._handleFlowUpdated();
+            },
+            startFlowHandler: integration.supported_by,
+            manifest: await fetchIntegrationManifest(
+              this.hass,
+              integration.supported_by!
+            ),
+            showAdvanced: this.hass.userData?.showAdvanced,
           });
         },
       });
-
       return;
     }
 
     // If not an integration or supported brand, try helper else show alert
-    if (HELPER_DOMAINS.includes(domain)) {
+    if (isHelperDomain(domain)) {
       navigate(`/config/helpers/add?domain=${domain}`, {
         replace: true,
       });
       return;
     }
-    const helpers = await getConfigFlowHandlers(this.hass, "helper");
-    if (helpers.includes(domain)) {
+    const helpers = {
+      ...descriptions.core.helper,
+      ...descriptions.custom.helper,
+    };
+    const helper = findIntegration(helpers, domain);
+    if (helper) {
       navigate(`/config/helpers/add?domain=${domain}`, {
         replace: true,
       });
@@ -778,6 +829,9 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
         }
         ha-button-menu {
           margin-left: 8px;
+          margin-inline-start: 8px;
+          margin-inline-end: initial;
+          direction: var(--direction);
         }
         .container {
           display: grid;
@@ -806,6 +860,9 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
           display: block;
           color: var(--secondary-text-color);
           margin-left: 8px;
+          margin-inline-start: 8px;
+          margin-inline-end: initial;
+          direction: var(--direction);
           --mdc-ripple-color: transparant;
         }
         .search {
@@ -830,13 +887,22 @@ class HaConfigIntegrations extends SubscribeMixin(LitElement) {
           position: relative;
           display: flex;
           align-items: center;
-          padding: 2px 2px 2px 8px;
+          padding-top: 2px;
+          padding-bottom: 2px;
+          padding-right: 2px;
+          padding-left: 8px;
+          padding-inline-start: 8px;
+          padding-inline-end: 2px;
           font-size: 14px;
           width: max-content;
           cursor: initial;
+          direction: var(--direction);
         }
         .active-filters mwc-button {
           margin-left: 8px;
+          margin-inline-start: 8px;
+          margin-inline-end: initial;
+          direction: var(--direction);
         }
         .active-filters::before {
           background-color: var(--primary-color);

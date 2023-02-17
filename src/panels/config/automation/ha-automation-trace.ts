@@ -39,6 +39,7 @@ import { showAlertDialog } from "../../../dialogs/generic/show-dialog-box";
 import "../../../layouts/hass-subpage";
 import { haStyle } from "../../../resources/styles";
 import { HomeAssistant, Route } from "../../../types";
+import { computeRTL } from "../../../common/util/compute_rtl";
 
 @customElement("ha-automation-trace")
 export class HaAutomationTrace extends LitElement {
@@ -176,7 +177,9 @@ export class HaAutomationTrace extends LitElement {
                   .label=${this.hass!.localize(
                     "ui.panel.config.automation.trace.older_trace"
                   )}
-                  .path=${mdiRayEndArrow}
+                  .path=${computeRTL(this.hass!)
+                    ? mdiRayStartArrow
+                    : mdiRayEndArrow}
                   .disabled=${this._traces[this._traces.length - 1].run_id ===
                   this._runId}
                   @click=${this._pickOlderTrace}
@@ -198,7 +201,9 @@ export class HaAutomationTrace extends LitElement {
                   .label=${this.hass!.localize(
                     "ui.panel.config.automation.trace.newer_trace"
                   )}
-                  .path=${mdiRayStartArrow}
+                  .path=${computeRTL(this.hass!)
+                    ? mdiRayEndArrow
+                    : mdiRayStartArrow}
                   .disabled=${this._traces[0].run_id === this._runId}
                   @click=${this._pickNewerTrace}
                 ></ha-icon-button>
@@ -518,6 +523,7 @@ export class HaAutomationTrace extends LitElement {
           height: calc(100% - 56px);
           display: flex;
           background-color: var(--card-background-color);
+          direction: ltr;
         }
 
         :host([narrow]) .main {
@@ -540,17 +546,16 @@ export class HaAutomationTrace extends LitElement {
           justify-content: center;
           display: flex;
         }
-
         .info {
           flex: 1;
           background-color: var(--card-background-color);
         }
-
-        .linkButton {
-          color: var(--primary-text-color);
-        }
         .trace-link {
           text-decoration: none;
+        }
+
+        ha-trace-logbook {
+          direction: var(--direction);
         }
       `,
     ];

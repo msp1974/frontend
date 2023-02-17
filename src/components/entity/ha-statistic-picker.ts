@@ -3,11 +3,14 @@ import { html, LitElement, PropertyValues, TemplateResult } from "lit";
 import { ComboBoxLitRenderer } from "@vaadin/combo-box/lit";
 import { customElement, property, query, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
-import { ensureArray } from "../../common/ensure-array";
+import { ensureArray } from "../../common/array/ensure-array";
 import { fireEvent } from "../../common/dom/fire_event";
-import { computeStateName } from "../../common/entity/compute_state_name";
 import { stringCompare } from "../../common/string/compare";
-import { getStatisticIds, StatisticsMetaData } from "../../data/recorder";
+import {
+  getStatisticIds,
+  getStatisticLabel,
+  StatisticsMetaData,
+} from "../../data/recorder";
 import { PolymerChangedEvent } from "../../polymer-types";
 import { HomeAssistant } from "../../types";
 import { documentationUrl } from "../../util/documentation-url";
@@ -43,18 +46,18 @@ export class HaStatisticPicker extends LitElement {
   public includeStatisticsUnitOfMeasurement?: string | string[];
 
   /**
-   * Show only statistics displayed with these units of measurements.
-   * @attr include-display-unit-of-measurement
+   * Show only statistics with these unit classes.
+   * @attr include-unit-class
    */
-  @property({ attribute: "include-display-unit-of-measurement" })
-  public includeDisplayUnitOfMeasurement?: string | string[];
+  @property({ attribute: "include-unit-class" })
+  public includeUnitClass?: string | string[];
 
   /**
    * Show only statistics with these device classes.
-   * @attr include-device-classes
+   * @attr include-device-class
    */
-  @property({ attribute: "include-device-classes" })
-  public includeDeviceClasses?: string[];
+  @property({ attribute: "include-device-class" })
+  public includeDeviceClass?: string | string[];
 
   /**
    * Show only statistics on entities.
@@ -97,8 +100,8 @@ export class HaStatisticPicker extends LitElement {
     (
       statisticIds: StatisticsMetaData[],
       includeStatisticsUnitOfMeasurement?: string | string[],
-      includeDisplayUnitOfMeasurement?: string | string[],
-      includeDeviceClasses?: string[],
+      includeUnitClass?: string | string[],
+      includeDeviceClass?: string | string[],
       entitiesOnly?: boolean
     ): Array<{ id: string; name: string; state?: HassEntity }> => {
       if (!statisticIds.length) {
@@ -113,16 +116,32 @@ export class HaStatisticPicker extends LitElement {
       }
 
       if (includeStatisticsUnitOfMeasurement) {
-        const includeUnits = ensureArray(includeStatisticsUnitOfMeasurement);
+        const includeUnits: (string | null)[] = ensureArray(
+          includeStatisticsUnitOfMeasurement
+        );
         statisticIds = statisticIds.filter((meta) =>
           includeUnits.includes(meta.statistics_unit_of_measurement)
         );
       }
-      if (includeDisplayUnitOfMeasurement) {
-        const includeUnits = ensureArray(includeDisplayUnitOfMeasurement);
+      if (includeUnitClass) {
+        const includeUnitClasses: (string | null)[] =
+          ensureArray(includeUnitClass);
         statisticIds = statisticIds.filter((meta) =>
-          includeUnits.includes(meta.display_unit_of_measurement)
+          includeUnitClasses.includes(meta.unit_class)
         );
+      }
+      if (includeDeviceClass) {
+        const includeDeviceClasses: (string | null)[] =
+          ensureArray(includeDeviceClass);
+        statisticIds = statisticIds.filter((meta) => {
+          const stateObj = this.hass.states[meta.statistic_id];
+          if (!stateObj) {
+            return true;
+          }
+          return includeDeviceClasses.includes(
+            stateObj.attributes.device_class || ""
+          );
+        });
       }
 
       const output: Array<{
@@ -136,23 +155,16 @@ export class HaStatisticPicker extends LitElement {
           if (!entitiesOnly) {
             output.push({
               id: meta.statistic_id,
-              name: meta.name || meta.statistic_id,
+              name: getStatisticLabel(this.hass, meta.statistic_id, meta),
             });
           }
           return;
         }
-        if (
-          !includeDeviceClasses ||
-          includeDeviceClasses.includes(
-            entityState!.attributes.device_class || ""
-          )
-        ) {
-          output.push({
-            id: meta.statistic_id,
-            name: computeStateName(entityState),
-            state: entityState,
-          });
-        }
+        output.push({
+          id: meta.statistic_id,
+          name: getStatisticLabel(this.hass, meta.statistic_id, meta),
+          state: entityState,
+        });
       });
 
       if (!output.length) {
@@ -165,7 +177,9 @@ export class HaStatisticPicker extends LitElement {
       }
 
       if (output.length > 1) {
-        output.sort((a, b) => stringCompare(a.name || "", b.name || ""));
+        output.sort((a, b) =>
+          stringCompare(a.name || "", b.name || "", this.hass.locale.language)
+        );
       }
 
       output.push({
@@ -203,8 +217,8 @@ export class HaStatisticPicker extends LitElement {
         (this.comboBox as any).items = this._getStatistics(
           this.statisticIds!,
           this.includeStatisticsUnitOfMeasurement,
-          this.includeDisplayUnitOfMeasurement,
-          this.includeDeviceClasses,
+          this.includeUnitClass,
+          this.includeDeviceClass,
           this.entitiesOnly
         );
       } else {
@@ -212,8 +226,8 @@ export class HaStatisticPicker extends LitElement {
           (this.comboBox as any).items = this._getStatistics(
             this.statisticIds!,
             this.includeStatisticsUnitOfMeasurement,
-            this.includeDisplayUnitOfMeasurement,
-            this.includeDeviceClasses,
+            this.includeUnitClass,
+            this.includeDeviceClass,
             this.entitiesOnly
           );
         });

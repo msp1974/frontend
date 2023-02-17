@@ -68,10 +68,12 @@ import type { HomeAssistant, Route } from "../../../types";
 import { configSections } from "../ha-panel-config";
 import "../integrations/ha-integration-overflow-menu";
 
-export interface StateEntity extends Omit<EntityRegistryEntry, "id"> {
+export interface StateEntity
+  extends Omit<EntityRegistryEntry, "id" | "unique_id"> {
   readonly?: boolean;
   selectable?: boolean;
   id?: string;
+  unique_id?: string;
 }
 
 export interface EntityRow extends StateEntity {
@@ -180,6 +182,7 @@ export class HaConfigEntities extends SubscribeMixin(LitElement) {
         `,
       },
       name: {
+        main: true,
         title: this.hass.localize(
           "ui.panel.config.entities.picker.headers.name"
         ),
@@ -725,6 +728,7 @@ export class HaConfigEntities extends SubscribeMixin(LitElement) {
           selectable: false,
           entity_category: null,
           has_entity_name: false,
+          options: null,
         });
       }
       if (changed) {
@@ -931,6 +935,7 @@ export class HaConfigEntities extends SubscribeMixin(LitElement) {
     this._showDisabled = true;
     this._showReadOnly = true;
     this._showUnavailable = true;
+    this._showHidden = true;
   }
 
   static get styles(): CSSResultGroup {

@@ -5,6 +5,8 @@ import {
   mdiAlertCircle,
   mdiBookshelf,
   mdiBug,
+  mdiBugPlay,
+  mdiBugStop,
   mdiChevronLeft,
   mdiCog,
   mdiDelete,
@@ -31,6 +33,10 @@ import "../../../components/ha-card";
 import "../../../components/ha-icon-button";
 import "../../../components/ha-icon-next";
 import "../../../components/ha-svg-icon";
+import {
+  fetchApplicationCredentialsConfigEntry,
+  deleteApplicationCredential,
+} from "../../../data/application_credential";
 import { getSignedPath } from "../../../data/auth";
 import {
   ConfigEntry,
@@ -43,11 +49,17 @@ import {
   ERROR_STATES,
   RECOVERABLE_STATES,
 } from "../../../data/config_entries";
+import { getErrorLogDownloadUrl } from "../../../data/error_log";
 import type { DeviceRegistryEntry } from "../../../data/device_registry";
 import { getConfigEntryDiagnosticsDownloadUrl } from "../../../data/diagnostics";
 import type { EntityRegistryEntry } from "../../../data/entity_registry";
 import type { IntegrationManifest } from "../../../data/integration";
-import { integrationIssuesUrl } from "../../../data/integration";
+import {
+  integrationIssuesUrl,
+  IntegrationLogInfo,
+  LogSeverity,
+  setIntegrationLogLevel,
+} from "../../../data/integration";
 import { showConfigEntrySystemOptionsDialog } from "../../../dialogs/config-entry-system-options/show-dialog-config-entry-system-options";
 import { showOptionsFlowDialog } from "../../../dialogs/config-flow/show-dialog-options-flow";
 import {
@@ -61,9 +73,12 @@ import { documentationUrl } from "../../../util/documentation-url";
 import { fileDownload } from "../../../util/file_download";
 import type { ConfigEntryExtended } from "./ha-config-integrations";
 import "./ha-integration-header";
+import { isDevVersion } from "../../../common/config/version";
 
 const integrationsWithPanel = {
+  matter: "/config/matter",
   mqtt: "/config/mqtt",
+  thread: "/config/thread",
   zha: "/config/zha/dashboard",
   zwave_js: "/config/zwave_js/dashboard",
 };
@@ -86,9 +101,11 @@ export class HaIntegrationCard extends LitElement {
 
   @property() public selectedConfigEntryId?: string;
 
-  @property({ type: Boolean }) public disabled = false;
+  @property({ type: Boolean }) public entryDisabled = false;
 
   @property({ type: Boolean }) public supportsDiagnostics = false;
+
+  @property() public logInfo?: IntegrationLogInfo;
 
   protected render(): TemplateResult {
     let item = this._selectededConfigEntry;
@@ -110,7 +127,7 @@ export class HaIntegrationCard extends LitElement {
           single: hasItem,
           group: !hasItem,
           hasMultiple: this.items.length > 1,
-          disabled: this.disabled,
+          disabled: this.entryDisabled,
           "state-not-loaded": hasItem && item!.state === "not_loaded",
           "state-failed-unload": hasItem && item!.state === "failed_unload",
           "state-setup": hasItem && item!.state === "setup_in_progress",
@@ -120,7 +137,7 @@ export class HaIntegrationCard extends LitElement {
       >
         <ha-integration-header
           .hass=${this.hass}
-          .banner=${this.disabled
+          .banner=${this.entryDisabled
             ? this.hass.localize(
                 "ui.panel.config.integrations.config_entry.disable.disabled"
               )
@@ -132,6 +149,8 @@ export class HaIntegrationCard extends LitElement {
           .localizedDomainName=${item ? item.localized_domain_name : undefined}
           .manifest=${this.manifest}
           .configEntry=${item}
+          .debugLoggingEnabled=${this.logInfo &&
+          this.logInfo.level === LogSeverity.DEBUG}
         >
           ${this.items.length > 1
             ? html`
@@ -328,7 +347,9 @@ export class HaIntegrationCard extends LitElement {
             ? html`<mwc-button unelevated @click=${this._handleEnable}>
                 ${this.hass.localize("ui.common.enable")}
               </mwc-button>`
-            : item.domain in integrationsWithPanel
+            : item.domain in integrationsWithPanel &&
+              (item.domain !== "matter" ||
+                isDevVersion(this.hass.config.version))
             ? html`<a
                 href=${`${integrationsWithPanel[item.domain]}?config_entry=${
                   item.entry_id
@@ -392,6 +413,28 @@ export class HaIntegrationCard extends LitElement {
                   ></ha-svg-icon>
                 </mwc-list-item>
               </a>`
+            : ""}
+          ${this.logInfo
+            ? html`<mwc-list-item
+                @request-selected=${this.logInfo.level === LogSeverity.DEBUG
+                  ? this._handleDisableDebugLogging
+                  : this._handleEnableDebugLogging}
+                graphic="icon"
+              >
+                ${this.logInfo.level === LogSeverity.DEBUG
+                  ? this.hass.localize(
+                      "ui.panel.config.integrations.config_entry.disable_debug_logging"
+                    )
+                  : this.hass.localize(
+                      "ui.panel.config.integrations.config_entry.enable_debug_logging"
+                    )}
+                <ha-svg-icon
+                  slot="graphic"
+                  .path=${this.logInfo.level === LogSeverity.DEBUG
+                    ? mdiBugStop
+                    : mdiBugPlay}
+                ></ha-svg-icon>
+              </mwc-list-item>`
             : ""}
           ${this.manifest &&
           (this.manifest.is_built_in ||
@@ -494,6 +537,37 @@ export class HaIntegrationCard extends LitElement {
         </ha-button-menu>
       </div>
     `;
+  }
+
+  private async _handleEnableDebugLogging(ev: MouseEvent) {
+    const configEntry = ((ev.target as HTMLElement).closest("ha-card") as any)
+      .configEntry;
+    const integration = configEntry.domain;
+    await setIntegrationLogLevel(
+      this.hass,
+      integration,
+      LogSeverity[LogSeverity.DEBUG],
+      "once"
+    );
+  }
+
+  private async _handleDisableDebugLogging(ev: MouseEvent) {
+    // Stop propagation since otherwise we end up here twice while we await the log level change
+    // and trigger two identical debug log downloads.
+    ev.stopPropagation();
+    const configEntry = ((ev.target as HTMLElement).closest("ha-card") as any)
+      .configEntry;
+    const integration = configEntry.domain;
+    await setIntegrationLogLevel(
+      this.hass,
+      integration,
+      LogSeverity[LogSeverity.NOTSET],
+      "once"
+    );
+    const timeString = new Date().toISOString().replace(/:/g, "-");
+    const logFileName = `home-assistant_${integration}_${timeString}.log`;
+    const signedUrl = await getSignedPath(this.hass, getErrorLogDownloadUrl);
+    fileDownload(signedUrl.path, logFileName);
   }
 
   private get _selectededConfigEntry(): ConfigEntryExtended | undefined {
@@ -698,6 +772,10 @@ export class HaIntegrationCard extends LitElement {
   private async _removeIntegration(configEntry: ConfigEntry) {
     const entryId = configEntry.entry_id;
 
+    const applicationCredentialsId = await this._applicationCredentialForRemove(
+      entryId
+    );
+
     const confirmed = await showConfirmationDialog(this, {
       title: this.hass.localize(
         "ui.panel.config.integrations.config_entry.delete_confirm_title",
@@ -721,6 +799,70 @@ export class HaIntegrationCard extends LitElement {
         text: this.hass.localize(
           "ui.panel.config.integrations.config_entry.restart_confirm"
         ),
+      });
+    }
+    if (applicationCredentialsId) {
+      this._removeApplicationCredential(applicationCredentialsId);
+    }
+  }
+
+  // Return an application credentials id for this config entry to prompt the
+  // user for removal. This is best effort so we don't stop overall removal
+  // if the integration isn't loaded or there is some other error.
+  private async _applicationCredentialForRemove(entryId: string) {
+    try {
+      return (await fetchApplicationCredentialsConfigEntry(this.hass, entryId))
+        .application_credentials_id;
+    } catch (err: any) {
+      // We won't prompt the user to remove credentials
+      return null;
+    }
+  }
+
+  private async _removeApplicationCredential(applicationCredentialsId: string) {
+    const confirmed = await showConfirmationDialog(this, {
+      title: this.hass.localize(
+        "ui.panel.config.integrations.config_entry.application_credentials.delete_title"
+      ),
+      text: html`${this.hass.localize(
+          "ui.panel.config.integrations.config_entry.application_credentials.delete_prompt"
+        )},
+        <br />
+        <br />
+        ${this.hass.localize(
+          "ui.panel.config.integrations.config_entry.application_credentials.delete_detail"
+        )}
+        <br />
+        <br />
+        <a
+          href=${documentationUrl(
+            this.hass,
+            "/integrations/application_credentials/"
+          )}
+          target="_blank"
+          rel="noreferrer"
+        >
+          ${this.hass.localize(
+            "ui.panel.config.integrations.config_entry.application_credentials.learn_more"
+          )}
+        </a>`,
+      destructive: true,
+      confirmText: this.hass.localize("ui.common.remove"),
+      dismissText: this.hass.localize(
+        "ui.panel.config.integrations.config_entry.application_credentials.dismiss"
+      ),
+    });
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await deleteApplicationCredential(this.hass, applicationCredentialsId);
+    } catch (err: any) {
+      showAlertDialog(this, {
+        title: this.hass.localize(
+          "ui.panel.config.integrations.config_entry.application_credentials.delete_error_title"
+        ),
+        text: err.message,
       });
     }
   }
@@ -803,6 +945,8 @@ export class HaIntegrationCard extends LitElement {
           --mdc-icon-button-size: 32px;
           transition: height 0.1s;
           overflow: hidden;
+          border-top-left-radius: var(--ha-card-border-radius, 12px);
+          border-top-right-radius: var(--ha-card-border-radius, 12px);
         }
         .hasMultiple.single .back-btn {
           height: 24px;
@@ -856,6 +1000,10 @@ export class HaIntegrationCard extends LitElement {
         ha-button-menu {
           color: var(--secondary-text-color);
           --mdc-menu-min-width: 200px;
+        }
+        paper-listbox {
+          border-radius: 0 0 var(--ha-card-border-radius, 16px)
+            var(--ha-card-border-radius, 16px);
         }
         @media (min-width: 563px) {
           ha-card.group {

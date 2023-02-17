@@ -3,11 +3,9 @@ import {
   createConfigFlow,
   deleteConfigFlow,
   fetchConfigFlow,
-  getConfigFlowHandlers,
   handleConfigFlowStep,
 } from "../../data/config_flow";
 import { domainToName } from "../../data/integration";
-import { getSupportedBrands } from "../../data/supported_brands";
 import {
   DataEntryFlowDialogParams,
   loadDataEntryFlowDialog,
@@ -22,20 +20,11 @@ export const showConfigFlowDialog = (
 ): void =>
   showFlowDialog(element, dialogParams, {
     loadDevicesAndAreas: true,
-    getFlowHandlers: async (hass) => {
-      const [integrations, helpers, supportedBrands] = await Promise.all([
-        getConfigFlowHandlers(hass, "integration"),
-        getConfigFlowHandlers(hass, "helper"),
-        getSupportedBrands(hass),
-        hass.loadBackendTranslation("title", undefined, true),
-      ]);
-
-      return { integrations, helpers, supportedBrands };
-    },
     createFlow: async (hass, handler) => {
       const [step] = await Promise.all([
         createConfigFlow(hass, handler),
         hass.loadBackendTranslation("config", handler),
+        hass.loadBackendTranslation("selector", handler),
         // Used as fallback if no header defined for step
         hass.loadBackendTranslation("title", handler),
       ]);
@@ -44,6 +33,7 @@ export const showConfigFlowDialog = (
     fetchFlow: async (hass, flowId) => {
       const step = await fetchConfigFlow(hass, flowId);
       await hass.loadBackendTranslation("config", step.handler);
+      await hass.loadBackendTranslation("selector", step.handler);
       return step;
     },
     handleFlowStep: handleConfigFlowStep,
@@ -99,10 +89,16 @@ export const showConfigFlowDialog = (
     },
 
     renderShowFormStepFieldError(hass, step, error) {
-      return hass.localize(
-        `component.${step.handler}.config.error.${error}`,
-        step.description_placeholders
+      return (
+        hass.localize(
+          `component.${step.handler}.config.error.${error}`,
+          step.description_placeholders
+        ) || error
       );
+    },
+
+    renderShowFormStepFieldLocalizeValue(hass, step, key) {
+      return hass.localize(`component.${step.handler}.selector.${key}`);
     },
 
     renderExternalStepHeader(hass, step) {
@@ -216,7 +212,7 @@ export const showConfigFlowDialog = (
     },
 
     renderLoadingDescription(hass, reason, handler, step) {
-      if (!["loading_flow", "loading_step"].includes(reason)) {
+      if (reason !== "loading_flow" && reason !== "loading_step") {
         return "";
       }
       const domain = step?.handler || handler;

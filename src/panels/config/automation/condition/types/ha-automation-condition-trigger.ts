@@ -3,7 +3,7 @@ import { UnsubscribeFunc } from "home-assistant-js-websocket";
 import { html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { fireEvent } from "../../../../../common/dom/fire_event";
-import { ensureArray } from "../../../../../common/ensure-array";
+import { ensureArray } from "../../../../../common/array/ensure-array";
 import "../../../../../components/ha-select";
 import type {
   AutomationConfig,
@@ -17,6 +17,8 @@ export class HaTriggerCondition extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @property({ attribute: false }) public condition!: TriggerCondition;
+
+  @property({ type: Boolean }) public disabled = false;
 
   @state() private _triggers: Trigger[] = [];
 
@@ -55,6 +57,7 @@ export class HaTriggerCondition extends LitElement {
         "ui.panel.config.automation.editor.conditions.type.trigger.id"
       )}
       .value=${id}
+      .disabled=${this.disabled}
       @selected=${this._triggerPicked}
     >
       ${this._triggers.map(
@@ -67,8 +70,11 @@ export class HaTriggerCondition extends LitElement {
   }
 
   private _automationUpdated(config?: AutomationConfig) {
+    const seenIds = new Set();
     this._triggers = config?.trigger
-      ? ensureArray(config.trigger).filter((t) => t.id)
+      ? ensureArray(config.trigger).filter(
+          (t) => t.id && (seenIds.has(t.id) ? false : seenIds.add(t.id))
+        )
       : [];
   }
 

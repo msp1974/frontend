@@ -21,9 +21,9 @@ import type { HaRadio } from "../../../../components/ha-radio";
 import { showConfigFlowDialog } from "../../../../dialogs/config-flow/show-dialog-config-flow";
 import { ConfigEntry, getConfigEntries } from "../../../../data/config_entries";
 import { brandsUrl } from "../../../../util/brands-url";
+import { getSensorDeviceClassConvertibleUnits } from "../../../../data/sensor";
 
-const energyUnits = ["kWh"];
-const energyDeviceClasses = ["energy"];
+const energyUnitClasses = ["energy"];
 
 @customElement("dialog-energy-solar-settings")
 export class DialogEnergySolarSettings
@@ -40,6 +40,8 @@ export class DialogEnergySolarSettings
 
   @state() private _forecast?: boolean;
 
+  @state() private _energy_units?: string[];
+
   @state() private _error?: string;
 
   public async showDialog(
@@ -51,6 +53,9 @@ export class DialogEnergySolarSettings
       ? { ...params.source }
       : emptySolarEnergyPreference();
     this._forecast = this._source.config_entry_solar_forecast !== null;
+    this._energy_units = (
+      await getSensorDeviceClassConvertibleUnits(this.hass, "energy")
+    ).units;
   }
 
   public closeDialog(): void {
@@ -65,6 +70,8 @@ export class DialogEnergySolarSettings
       return html``;
     }
 
+    const pickableUnit = this._energy_units?.join(", ") || "";
+
     return html`
       <ha-dialog
         open
@@ -76,11 +83,16 @@ export class DialogEnergySolarSettings
         @closed=${this.closeDialog}
       >
         ${this._error ? html`<p class="error">${this._error}</p>` : ""}
+        <div>
+          ${this.hass.localize(
+            "ui.panel.config.energy.solar.dialog.entity_para",
+            { unit: pickableUnit }
+          )}
+        </div>
 
         <ha-statistic-picker
           .hass=${this.hass}
-          .includeStatisticsUnitOfMeasurement=${energyUnits}
-          .includeDeviceClasses=${energyDeviceClasses}
+          .includeUnitClass=${energyUnitClasses}
           .value=${this._source.stat_energy_from}
           .label=${this.hass.localize(
             "ui.panel.config.energy.solar.dialog.solar_production_energy"
@@ -132,6 +144,7 @@ export class DialogEnergySolarSettings
                     style="display: flex; align-items: center;"
                   >
                     <img
+                      alt=""
                       referrerpolicy="no-referrer"
                       style="height: 24px; margin-right: 16px;"
                       src=${brandsUrl({
@@ -181,10 +194,10 @@ export class DialogEnergySolarSettings
         ? []
         : domains.length === 1
         ? await getConfigEntries(this.hass, {
-            type: "integration",
+            type: ["service"],
             domain: domains[0],
           })
-        : (await getConfigEntries(this.hass, { type: "integration" })).filter(
+        : (await getConfigEntries(this.hass, { type: ["service"] })).filter(
             (entry) => domains.includes(entry.domain)
           );
   }

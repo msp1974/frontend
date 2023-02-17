@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
 const path = require("path");
 const env = require("./env.js");
 const paths = require("./paths.js");
 
 // Files from NPM Packages that should not be imported
+// eslint-disable-next-line unused-imports/no-unused-vars
 module.exports.ignorePackages = ({ latestBuild }) => [
   // Part of yaml.js and only used for !!js functions that we don't use
   require.resolve("esprima"),
@@ -67,7 +67,7 @@ module.exports.babelOptions = ({ latestBuild }) => ({
       "@babel/preset-env",
       {
         useBuiltIns: "entry",
-        corejs: "3.15",
+        corejs: { version: "3.28", proposals: true },
         bugfixes: true,
       },
     ],

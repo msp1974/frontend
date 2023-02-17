@@ -27,6 +27,7 @@ import {
   fetchStatistics,
   getStatisticLabel,
   Statistics,
+  StatisticsUnitConfiguration,
 } from "../../../../data/recorder";
 import { FrontendLocaleData } from "../../../../data/translation";
 import { SubscribeMixin } from "../../../../mixins/subscribe-mixin";
@@ -86,6 +87,7 @@ export class HuiEnergyDevicesGraphCard
           })}"
         >
           <ha-chart-base
+            .hass=${this.hass}
             .data=${this._chartData}
             .options=${this._createOptions(this.hass.locale)}
             .height=${(this._chartData?.datasets[0]?.data.length || 0) * 28 +
@@ -181,12 +183,19 @@ export class HuiEnergyDevicesGraphCard
 
     const startMinHour = addHours(energyData.start, -1);
 
+    const lengthUnit = this.hass.config.unit_system.length || "";
+    const units: StatisticsUnitConfiguration = {
+      energy: "kWh",
+      volume: lengthUnit === "km" ? "m³" : "ft³",
+    };
+
     const data = await fetchStatistics(
       this.hass,
       startMinHour,
       energyData.end,
       devices,
-      period
+      period,
+      units
     );
 
     Object.values(data).forEach((stat) => {
@@ -194,8 +203,8 @@ export class HuiEnergyDevicesGraphCard
       if (stat.length && new Date(stat[0].start) > startMinHour) {
         stat.unshift({
           ...stat[0],
-          start: startMinHour.toISOString(),
-          end: startMinHour.toISOString(),
+          start: startMinHour.getTime(),
+          end: startMinHour.getTime(),
           sum: 0,
           state: 0,
         });
@@ -211,7 +220,8 @@ export class HuiEnergyDevicesGraphCard
         startCompareMinHour,
         energyData.endCompare,
         devices,
-        period
+        period,
+        units
       );
 
       Object.values(compareData).forEach((stat) => {
@@ -219,8 +229,8 @@ export class HuiEnergyDevicesGraphCard
         if (stat.length && new Date(stat[0].start) > startMinHour) {
           stat.unshift({
             ...stat[0],
-            start: startCompareMinHour.toISOString(),
-            end: startCompareMinHour.toISOString(),
+            start: startCompareMinHour.getTime(),
+            end: startCompareMinHour.getTime(),
             sum: 0,
             state: 0,
           });

@@ -1,7 +1,15 @@
 import { html, LitElement, PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators";
 import memoizeOne from "memoize-one";
-import { assert, literal, object, optional, string, union } from "superstruct";
+import {
+  assert,
+  boolean,
+  literal,
+  object,
+  optional,
+  string,
+  union,
+} from "superstruct";
 import { createDurationData } from "../../../../../common/datetime/create_duration_data";
 import { fireEvent } from "../../../../../common/dom/fire_event";
 import "../../../../../components/ha-form/ha-form";
@@ -18,6 +26,7 @@ const stateConditionStruct = object({
   attribute: optional(string()),
   state: optional(string()),
   for: optional(union([string(), forDictStruct])),
+  enabled: optional(boolean()),
 });
 
 @customElement("ha-automation-condition-state")
@@ -25,6 +34,8 @@ export class HaStateCondition extends LitElement implements ConditionElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @property({ attribute: false }) public condition!: StateCondition;
+
+  @property({ type: Boolean }) public disabled = false;
 
   public static get defaultConfig() {
     return { entity_id: "", state: "" };
@@ -100,6 +111,7 @@ export class HaStateCondition extends LitElement implements ConditionElement {
         .hass=${this.hass}
         .data=${data}
         .schema=${schema}
+        .disabled=${this.disabled}
         @value-changed=${this._valueChanged}
         .computeLabel=${this._computeLabelCallback}
       ></ha-form>

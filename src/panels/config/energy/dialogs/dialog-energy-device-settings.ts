@@ -13,9 +13,9 @@ import "../../../../components/entity/ha-statistic-picker";
 import "../../../../components/ha-radio";
 import "../../../../components/ha-formfield";
 import "../../../../components/entity/ha-entity-picker";
+import { getSensorDeviceClassConvertibleUnits } from "../../../../data/sensor";
 
-const energyUnits = ["kWh"];
-const energyDeviceClasses = ["energy"];
+const energyUnitClasses = ["energy"];
 
 @customElement("dialog-energy-device-settings")
 export class DialogEnergyDeviceSettings
@@ -28,12 +28,17 @@ export class DialogEnergyDeviceSettings
 
   @state() private _device?: DeviceConsumptionEnergyPreference;
 
+  @state() private _energy_units?: string[];
+
   @state() private _error?: string;
 
   public async showDialog(
     params: EnergySettingsDeviceDialogParams
   ): Promise<void> {
     this._params = params;
+    this._energy_units = (
+      await getSensorDeviceClassConvertibleUnits(this.hass, "energy")
+    ).units;
   }
 
   public closeDialog(): void {
@@ -47,6 +52,8 @@ export class DialogEnergyDeviceSettings
     if (!this._params) {
       return html``;
     }
+
+    const pickableUnit = this._energy_units?.join(", ") || "";
 
     return html`
       <ha-dialog
@@ -63,14 +70,14 @@ export class DialogEnergyDeviceSettings
         ${this._error ? html`<p class="error">${this._error}</p>` : ""}
         <div>
           ${this.hass.localize(
-            `ui.panel.config.energy.device_consumption.dialog.selected_stat_intro`
+            "ui.panel.config.energy.device_consumption.dialog.selected_stat_intro",
+            { unit: pickableUnit }
           )}
         </div>
 
         <ha-statistic-picker
           .hass=${this.hass}
-          .includeStatisticsUnitOfMeasurement=${energyUnits}
-          .includeDeviceClasses=${energyDeviceClasses}
+          .includeUnitClass=${energyUnitClasses}
           .label=${this.hass.localize(
             "ui.panel.config.energy.device_consumption.dialog.device_consumption_energy"
           )}

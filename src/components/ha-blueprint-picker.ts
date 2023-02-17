@@ -41,12 +41,14 @@ class HaBluePrintPicker extends LitElement {
       return [];
     }
     const result = Object.entries(blueprints)
-      .filter(([_path, blueprint]) => !("error" in blueprint))
+      .filter((entry): entry is [string, Blueprint] => !("error" in entry[1]))
       .map(([path, blueprint]) => ({
-        ...(blueprint as Blueprint).metadata,
+        ...blueprint.metadata,
         path,
       }));
-    return result.sort((a, b) => stringCompare(a.name, b.name));
+    return result.sort((a, b) =>
+      stringCompare(a.name, b.name, this.hass!.locale.language)
+    );
   });
 
   protected render(): TemplateResult {

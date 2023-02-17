@@ -15,7 +15,7 @@ import {
   Describe,
   boolean,
 } from "superstruct";
-import { computeObjectId } from "../common/entity/compute_object_id";
+import { arrayLiteralIncludes } from "../common/array/literal-includes";
 import { navigate } from "../common/navigate";
 import { HomeAssistant } from "../types";
 import {
@@ -29,11 +29,7 @@ import { BlueprintInput } from "./blueprint";
 
 export const MODES = ["single", "restart", "queued", "parallel"] as const;
 export const MODES_MAX = ["queued", "parallel"] as const;
-
-export const isMaxMode = (
-  mode: typeof MODES[number]
-): mode is typeof MODES_MAX[number] =>
-  MODES_MAX.includes(mode as typeof MODES_MAX[number]);
+export const isMaxMode = arrayLiteralIncludes(MODES_MAX);
 
 export const baseActionStruct = object({
   alias: optional(string()),
@@ -81,7 +77,7 @@ const activateSceneActionStruct: Describe<ServiceSceneAction> = assign(
 export interface ScriptEntity extends HassEntityBase {
   attributes: HassEntityAttributeBase & {
     last_triggered: string;
-    mode: typeof MODES[number];
+    mode: (typeof MODES)[number];
     current?: number;
     max?: number;
   };
@@ -93,7 +89,7 @@ export interface ManualScriptConfig {
   alias: string;
   sequence: Action | Action[];
   icon?: string;
-  mode?: typeof MODES[number];
+  mode?: (typeof MODES)[number];
   max?: number;
 }
 
@@ -186,7 +182,7 @@ interface BaseRepeat extends BaseAction {
 }
 
 export interface CountRepeat extends BaseRepeat {
-  count: number;
+  count: number | string;
 }
 
 export interface WhileRepeat extends BaseRepeat {
@@ -278,9 +274,9 @@ export type ActionType = keyof ActionTypes;
 
 export const triggerScript = (
   hass: HomeAssistant,
-  entityId: string,
+  scriptId: string,
   variables?: Record<string, unknown>
-) => hass.callService("script", computeObjectId(entityId), variables);
+) => hass.callService("script", scriptId, variables);
 
 export const canRun = (state: ScriptEntity) => {
   if (state.state === "off") {
@@ -301,8 +297,14 @@ export const deleteScript = (hass: HomeAssistant, objectId: string) =>
 
 let inititialScriptEditorData: Partial<ScriptConfig> | undefined;
 
-export const getScriptConfig = (hass: HomeAssistant, objectId: string) =>
+export const fetchScriptFileConfig = (hass: HomeAssistant, objectId: string) =>
   hass.callApi<ScriptConfig>("GET", `config/script/config/${objectId}`);
+
+export const getScriptStateConfig = (hass: HomeAssistant, entity_id: string) =>
+  hass.callWS<{ config: ScriptConfig }>({
+    type: "script/config",
+    entity_id,
+  });
 
 export const showScriptEditor = (data?: Partial<ScriptConfig>) => {
   inititialScriptEditorData = data;

@@ -1,7 +1,7 @@
 import { TextFieldBase } from "@material/mwc-textfield/mwc-textfield-base";
 import { styles } from "@material/mwc-textfield/mwc-textfield.css";
 import { TemplateResult, html, PropertyValues, css } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, query } from "lit/decorators";
 
 @customElement("ha-textfield")
 export class HaTextField extends TextFieldBase {
@@ -15,6 +15,10 @@ export class HaTextField extends TextFieldBase {
   // @ts-ignore
   @property({ type: Boolean }) public iconTrailing?: boolean;
 
+  @property() public autocomplete?: string;
+
+  @query("input") public formElement!: HTMLInputElement;
+
   override updated(changedProperties: PropertyValues) {
     super.updated(changedProperties);
     if (
@@ -26,6 +30,13 @@ export class HaTextField extends TextFieldBase {
         this.invalid ? this.errorMessage || "Invalid" : ""
       );
       this.reportValidity();
+    }
+    if (changedProperties.has("autocomplete")) {
+      if (this.autocomplete) {
+        this.formElement.setAttribute("autocomplete", this.autocomplete);
+      } else {
+        this.formElement.removeAttribute("autocomplete");
+      }
     }
   }
 
@@ -82,6 +93,16 @@ export class HaTextField extends TextFieldBase {
         direction: var(--direction);
       }
 
+      .mdc-floating-label:not(.mdc-floating-label--float-above) {
+        text-overflow: ellipsis;
+        width: inherit;
+        padding-right: 30px;
+        padding-inline-end: 30px;
+        padding-inline-start: initial;
+        box-sizing: border-box;
+        direction: var(--direction);
+      }
+
       input {
         text-align: var(--text-field-text-align, start);
       }
@@ -111,7 +132,7 @@ export class HaTextField extends TextFieldBase {
         inset-inline-end: initial !important;
         transform-origin: var(--float-start);
         direction: var(--direction);
-        transform-origin: var(--float-start);
+        text-align: var(--float-start);
       }
 
       .mdc-text-field--with-leading-icon.mdc-text-field--filled

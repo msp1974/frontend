@@ -1,27 +1,20 @@
 import { css, CSSResultGroup, html, LitElement, PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators";
-import { any, assert, object, optional, string } from "superstruct";
+import { assert } from "superstruct";
 import { fireEvent } from "../../../../../common/dom/fire_event";
 import { hasTemplate } from "../../../../../common/string/has-template";
-import { entityIdOrAll } from "../../../../../common/structs/is-entity-id";
 import "../../../../../components/ha-service-control";
-import { ServiceAction } from "../../../../../data/script";
+import { ServiceAction, serviceActionStruct } from "../../../../../data/script";
 import type { HomeAssistant } from "../../../../../types";
 import { ActionElement } from "../ha-automation-action-row";
-
-const actionStruct = object({
-  alias: optional(string()),
-  service: optional(string()),
-  entity_id: optional(entityIdOrAll()),
-  target: optional(any()),
-  data: optional(any()),
-});
 
 @customElement("ha-automation-action-service")
 export class HaServiceAction extends LitElement implements ActionElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @property({ attribute: false }) public action!: ServiceAction;
+
+  @property({ type: Boolean }) public disabled = false;
 
   @property({ type: Boolean }) public narrow = false;
 
@@ -36,7 +29,7 @@ export class HaServiceAction extends LitElement implements ActionElement {
       return;
     }
     try {
-      assert(this.action, actionStruct);
+      assert(this.action, serviceActionStruct);
     } catch (err: any) {
       fireEvent(this, "ui-mode-not-available", err);
       return;
@@ -66,6 +59,7 @@ export class HaServiceAction extends LitElement implements ActionElement {
         .narrow=${this.narrow}
         .hass=${this.hass}
         .value=${this._action}
+        .disabled=${this.disabled}
         .showAdvanced=${this.hass.userData?.showAdvanced}
         @value-changed=${this._actionChanged}
       ></ha-service-control>

@@ -17,6 +17,8 @@ import { HomeAssistant } from "../../../../../types";
 export class HaDeviceAction extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
+  @property({ type: Boolean }) public disabled = false;
+
   @property({ type: Object }) public action!: DeviceAction;
 
   @state() private _deviceId?: string;
@@ -51,6 +53,7 @@ export class HaDeviceAction extends LitElement {
     return html`
       <ha-device-picker
         .value=${deviceId}
+        .disabled=${this.disabled}
         @value-changed=${this._devicePicked}
         .hass=${this.hass}
         label=${this.hass.localize(
@@ -60,18 +63,20 @@ export class HaDeviceAction extends LitElement {
       <ha-device-action-picker
         .value=${this.action}
         .deviceId=${deviceId}
+        .disabled=${this.disabled}
         @value-changed=${this._deviceActionPicked}
         .hass=${this.hass}
         label=${this.hass.localize(
           "ui.panel.config.automation.editor.actions.type.device_id.action"
         )}
       ></ha-device-action-picker>
-      ${this._capabilities?.extra_fields
+      ${this._capabilities?.extra_fields?.length
         ? html`
             <ha-form
               .hass=${this.hass}
               .data=${this._extraFieldsData(this.action, this._capabilities)}
               .schema=${this._capabilities.extra_fields}
+              .disabled=${this.disabled}
               .computeLabel=${this._extraFieldsComputeLabelCallback(
                 this.hass.localize
               )}
@@ -145,10 +150,16 @@ export class HaDeviceAction extends LitElement {
   static styles = css`
     ha-device-picker {
       display: block;
-      margin-bottom: 16px;
+      margin-bottom: 24px;
     }
+
     ha-device-action-picker {
       display: block;
+    }
+
+    ha-form {
+      display: block;
+      margin-top: 24px;
     }
   `;
 }

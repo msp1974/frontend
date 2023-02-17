@@ -8,7 +8,7 @@ import { BlueprintInput } from "./blueprint";
 import { DeviceCondition, DeviceTrigger } from "./device_automation";
 import { Action, MODES } from "./script";
 
-export const AUTOMATION_DEFAULT_MODE: typeof MODES[number] = "single";
+export const AUTOMATION_DEFAULT_MODE: (typeof MODES)[number] = "single";
 export const AUTOMATION_DEFAULT_MAX = 10;
 
 export interface AutomationEntity extends HassEntityBase {
@@ -29,7 +29,7 @@ export interface ManualAutomationConfig {
   trigger: Trigger | Trigger[];
   condition?: Condition | Condition[];
   action: Action | Action[];
-  mode?: typeof MODES[number];
+  mode?: (typeof MODES)[number];
   max?: number;
   max_exceeded?:
     | "silent"
@@ -311,8 +311,17 @@ export const deleteAutomation = (hass: HomeAssistant, id: string) =>
 
 let inititialAutomationEditorData: Partial<AutomationConfig> | undefined;
 
-export const getAutomationConfig = (hass: HomeAssistant, id: string) =>
+export const fetchAutomationFileConfig = (hass: HomeAssistant, id: string) =>
   hass.callApi<AutomationConfig>("GET", `config/automation/config/${id}`);
+
+export const getAutomationStateConfig = (
+  hass: HomeAssistant,
+  entity_id: string
+) =>
+  hass.callWS<{ config: AutomationConfig }>({
+    type: "automation/config",
+    entity_id,
+  });
 
 export const saveAutomationConfig = (
   hass: HomeAssistant,

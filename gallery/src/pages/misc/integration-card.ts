@@ -196,6 +196,8 @@ const createEntityRegistryEntries = (
     icon: null,
     platform: "updater",
     has_entity_name: false,
+    unique_id: "updater",
+    options: null,
   },
 ];
 
@@ -282,7 +284,7 @@ export class DemoIntegrationCard extends LitElement {
               .deviceRegistryEntries=${createDeviceRegistryEntries(
                 info.items[0]
               )}
-              ?disabled=${info.disabled}
+              ?entryDisabled=${info.disabled}
               .selectedConfigEntryId=${info.highlight}
             ></ha-integration-card>
           `

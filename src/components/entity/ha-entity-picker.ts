@@ -1,4 +1,4 @@
-import "@material/mwc-list/mwc-list-item";
+import "../ha-list-item";
 import { HassEntity } from "home-assistant-js-websocket";
 import { html, LitElement, PropertyValues, TemplateResult } from "lit";
 import { ComboBoxLitRenderer } from "@vaadin/combo-box/lit";
@@ -24,13 +24,13 @@ export type HaEntityPickerEntityFilterFunc = (entity: HassEntity) => boolean;
 
 // eslint-disable-next-line lit/prefer-static-styles
 const rowRenderer: ComboBoxLitRenderer<HassEntityWithCachedName> = (item) =>
-  html`<mwc-list-item graphic="avatar" .twoline=${!!item.entity_id}>
+  html`<ha-list-item graphic="avatar" .twoline=${!!item.entity_id}>
     ${item.state
       ? html`<state-badge slot="graphic" .stateObj=${item}></state-badge>`
       : ""}
     <span>${item.friendly_name}</span>
     <span slot="secondary">${item.entity_id}</span>
-  </mwc-list-item>`;
+  </ha-list-item>`;
 
 @customElement("ha-entity-picker")
 export class HaEntityPicker extends LitElement {
@@ -107,16 +107,14 @@ export class HaEntityPicker extends LitElement {
 
   @query("ha-combo-box", true) public comboBox!: HaComboBox;
 
-  public open() {
-    this.updateComplete.then(() => {
-      this.comboBox?.open();
-    });
+  public async open() {
+    await this.updateComplete;
+    await this.comboBox?.open();
   }
 
-  public focus() {
-    this.updateComplete.then(() => {
-      this.comboBox?.focus();
-    });
+  public async focus() {
+    await this.updateComplete;
+    await this.comboBox?.focus();
   }
 
   private _initedStates = false;
@@ -176,7 +174,8 @@ export class HaEntityPicker extends LitElement {
           .sort((entityA, entityB) =>
             caseInsensitiveStringCompare(
               entityA.friendly_name,
-              entityB.friendly_name
+              entityB.friendly_name,
+              this.hass.locale.language
             )
           );
       }
@@ -207,7 +206,8 @@ export class HaEntityPicker extends LitElement {
         .sort((entityA, entityB) =>
           caseInsensitiveStringCompare(
             entityA.friendly_name,
-            entityB.friendly_name
+            entityB.friendly_name,
+            this.hass.locale.language
           )
         );
 
@@ -312,6 +312,7 @@ export class HaEntityPicker extends LitElement {
         .filteredItems=${this._states}
         .renderer=${rowRenderer}
         .required=${this.required}
+        .disabled=${this.disabled}
         @opened-changed=${this._openedChanged}
         @value-changed=${this._valueChanged}
         @filter-changed=${this._filterChanged}
